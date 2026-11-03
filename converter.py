@@ -22,7 +22,10 @@ def get_file_group(file_type: str):
 def file_to_str(file_bytes: BytesIO, file_group: str, file_type: str):
     result = ""
 
-    if file_group == "docx":
+    if file_group == "txt":
+        result = file_bytes.getvalue().decode("utf-8")
+
+    elif file_group == "docx":
         doc = docx.Document(file_bytes)
         for paragraph in doc.paragraphs:
             result += paragraph.text + "\n"

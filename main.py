@@ -5,6 +5,7 @@ from converter import file_to_str, get_file_group
 app = FastAPI()
 
 ALLOWED_MIMETYPES = {
+    "text/plain": "txt",
     "application/pdf": "pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "application/vnd.oasis.opendocument.text": "odt",
@@ -29,4 +30,4 @@ async def convert(file: UploadFile =  File(...)):
         "result": file_to_str(io.BytesIO(await file.read()), file_group, file_type)
     }
 
-# py -m uvicorn main:app --reload
+# uvicorn main:app --reload
