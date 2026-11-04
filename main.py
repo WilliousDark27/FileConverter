@@ -1,33 +1,17 @@
 import io
 from fastapi import FastAPI, File, UploadFile
-from converter import file_to_str, get_file_group
+from converter import file_to_str, get_file_group, ALLOWED_MIMETYPES
 
 app = FastAPI()
 
-ALLOWED_MIMETYPES = {
-    "text/plain": "txt",
-    "application/pdf": "pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-    "application/vnd.oasis.opendocument.text": "odt",
-    "image/jpeg": "jpeg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/avif": "avif",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-    "application/vnd.oasis.opendocument.spreadsheet": "ods",
-}
-
 @app.post("/convert")
 async def convert(file: UploadFile =  File(...)):
-    file_type = ALLOWED_MIMETYPES.get(file.content_type)
-    if not file_type:
+    if file.content_type not in ALLOWED_MIMETYPES:
         return {"error": "Invalid file type!"}
-    file_group = get_file_group(file_type)
-    return {
-        "file_type": file.content_type,
-        "file_group": file_group,
-        "result": file_to_str(io.BytesIO(await file.read()), file_group, file_type)
-    }
+    try:
+        result = file_to_str(await file.read(), file.content_type)
+    except Exception as e:
+        return {"error": "Unable to read the file!", "error_text": str(e)}
+    return {"result": result}
 
 # uvicorn main:app --reload

@@ -1,4 +1,4 @@
-from io import BytesIO
+import io
 import numpy as np
 import docx
 import pymupdf
@@ -9,8 +9,24 @@ from PIL import Image
 import pillow_avif
 import pptx
 import pandas
+from faster_whisper import WhisperModel
 
-reader = easyocr.Reader(['ru', 'en'])
+from fastapi import UploadFile
+
+ALLOWED_MIMETYPES = {
+    "text/plain": "txt",
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.oasis.opendocument.text": "odt",
+    "application/vnd.oasis.opendocument.spreadsheet": "ods",
+    "image/jpeg": "jpeg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/avif": "avif",
+    "audio/mpeg": "mp3"
+}
 
 def get_file_group(file_type: str):
     if file_type in ("jpeg", "png", "webp", "avif"):
@@ -19,13 +35,29 @@ def get_file_group(file_type: str):
         return "sheet"
     return file_type
 
-def file_to_str(file_bytes: BytesIO, file_group: str, file_type: str):
+# -----------------------
+# ПОТОМ ОТСЮДА УБРАТЬ, НАПРИМЕР БРАТЬ ИЗ lifespan!!!
+_image_reader = easyocr.Reader(["ru", "en"])
+_audio_model =  WhisperModel("base", device="cpu", compute_type="int8")
+# -----------------------
+
+def file_to_str(
+    file_read: UploadFile,
+    content_type: str,
+    image_reader: easyocr.Reader = _image_reader, # УБРАТЬ _image_reader
+    audio_model: WhisperModel = _audio_model # УБРАТЬ _audio_model
+):
     result = ""
+    file_type = ALLOWED_MIMETYPES.get(content_type)
+    if not file_type: return
+    file_group = get_file_group(file_type)
 
     if file_group == "txt":
-        result = file_bytes.getvalue().decode("utf-8")
+        return file_read
+    
+    file_bytes = io.BytesIO(file_read)
 
-    elif file_group == "docx":
+    if file_group == "docx":
         doc = docx.Document(file_bytes)
         for paragraph in doc.paragraphs:
             result += paragraph.text + "\n"
@@ -45,12 +77,10 @@ def file_to_str(file_bytes: BytesIO, file_group: str, file_type: str):
 
     elif file_group == "image":
         image = Image.open(file_bytes)
-
         if image.mode != "RGB":
             image = image.convert("RGB")
-
         image_np = np.array(image) 
-        ocr_results = reader.readtext(image_np)
+        ocr_results = image_reader.readtext(image_np)
         result = "\n".join([text for (_, text, _) in ocr_results])
 
     elif file_group == "pptx":
@@ -68,5 +98,9 @@ def file_to_str(file_bytes: BytesIO, file_group: str, file_type: str):
         for sheet_name, df in all_sheets.items():     
             sheet_text = df.to_csv(index=False) 
             result += sheet_text  + "\n"
+
+    elif file_group == "mp3":
+        segments, info = audio_model.transcribe(file_bytes, beam_size=5)
+        result = "".join(segment.text for segment in segments).strip()
 
     return result
